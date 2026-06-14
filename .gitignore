@@ -1,0 +1,13 @@
+.env
+.cache/
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+*.egg-info/
+.DS_Store
+.claude/
+results/*.csv
+results/*.parquet
+
+# figures/*.png are committed on purpose — they're embedded in RESULTS.md.
