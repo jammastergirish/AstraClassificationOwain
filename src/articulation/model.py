@@ -46,6 +46,13 @@ CLASSIFY_SYSTEM = (
     "Do not explain your reasoning."
 )
 
+CLASSIFY_COT_SYSTEM = (
+    "You are shown labeled examples that all follow a single hidden rule mapping each "
+    "input string to True or False. Reason step by step to work out the rule, then "
+    "apply it to the final input. End your reply with a final line in exactly this "
+    "format:\nANSWER: True\nor\nANSWER: False"
+)
+
 ARTICULATE_SYSTEM_COT = (
     "You are shown labeled examples that all follow a single hidden rule mapping "
     "each input string to True or False. Work out the rule. You may reason briefly "
@@ -80,6 +87,19 @@ def _parse_label(raw: str) -> bool | None:
         return True
     if t.startswith("false"):
         return False
+    return None
+
+
+def _parse_answer(raw: str) -> bool | None:
+    """Pull the final `ANSWER: True/False` line out of a chain-of-thought reply."""
+    for line in reversed(raw.splitlines()):
+        s = line.strip().upper()
+        if s.startswith("ANSWER:"):
+            v = s[len("ANSWER:") :].strip()
+            if v.startswith("TRUE"):
+                return True
+            if v.startswith("FALSE"):
+                return False
     return None
 
 
@@ -129,6 +149,42 @@ def classify_one(
     )
     raw = _text(resp)
     label = _parse_label(raw)
+    cache.put(payload, {"label": label, "raw": raw})
+    return label, raw
+
+
+def classify_cot(
+    examples: list[tuple[str, bool]],
+    query: str,
+    model: str = SUBJECT_MODEL,
+    max_tokens: int = 1200,
+) -> tuple[bool | None, str]:
+    """Chain-of-thought classification: the model may reason, then gives a final
+    ANSWER line. Returns (predicted_label_or_None, raw_text)."""
+    prefix = _fewshot_block(examples) if examples else "No examples are provided."
+    query_block = (
+        f'\nNow classify the next input.\nInput: "{query}"\n'
+        "Reason step by step, then end with ANSWER: True or ANSWER: False."
+    )
+    payload = {
+        "op": "classify_cot",
+        "model": model,
+        "system": CLASSIFY_COT_SYSTEM,
+        "prefix": prefix,
+        "query": query_block,
+    }
+    hit = cache.get(payload)
+    if hit is not None:
+        return hit["label"], hit["raw"]
+
+    resp = client().messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=[{"type": "text", "text": CLASSIFY_COT_SYSTEM}],
+        messages=[{"role": "user", "content": prefix + query_block}],
+    )
+    raw = _text(resp)
+    label = _parse_answer(raw)
     cache.put(payload, {"label": label, "raw": raw})
     return label, raw
 

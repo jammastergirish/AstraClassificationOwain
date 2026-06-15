@@ -175,10 +175,167 @@ def fig_contrast():
     plt.close(fig)
 
 
+# --- Figure 0: HERO. In-distribution accuracy vs counterfactual genuineness -----
+# in-dist = Step-1 accuracy; genuineness = behaviour matching the INTENDED rule on
+# discriminating inputs (first_word_verb/is_question/conjunction genuine; the two
+# first-letter rules proxy). hunt_first_letter_ae genuineness is the pooled disc
+# metric (51%); its novel-content generalisation alone is only 12%.
+def fig_hero():
+    rules = [
+        "first_word\n_verb",
+        "is_question",
+        "conjunction\n(digit&lower)",
+        "first_letter\n_vowel",
+        "hunt_first\n_letter_ae",
+    ]
+    indist = [0.90, 1.00, 0.96, 0.88, 1.00]
+    genuine = [0.97, 0.97, 1.00, 0.37, 0.51]
+    x = range(len(rules))
+    w = 0.38
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    ax.bar(
+        [i - w / 2 for i in x],
+        indist,
+        w,
+        label="in-distribution accuracy (Step 1)",
+        color="#c4c4c4",
+    )
+    ax.bar(
+        [i + w / 2 for i in x],
+        genuine,
+        w,
+        label="counterfactual genuineness (behaviour matches INTENDED rule)",
+        color=["#55A868"] * 3 + ["#C44E52"] * 2,
+    )
+    ax.axhline(0.50, ls=":", color="grey", lw=1)
+    ax.text(4.35, 0.52, "chance", color="grey", fontsize=8)
+    ax.axvline(2.5, ls="--", color="black", lw=0.8)
+    ax.text(
+        1.0,
+        1.07,
+        "GENUINE  (semantic feature)",
+        ha="center",
+        fontsize=9,
+        color="#3a7a4f",
+    )
+    ax.text(
+        3.5, 1.07, "PROXY  (sub-symbolic)", ha="center", fontsize=9, color="#8a3438"
+    )
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(rules, fontsize=8)
+    ax.set_ylim(0, 1.16)
+    ax.set_ylabel("accuracy / genuineness")
+    ax.set_title(
+        "In-distribution accuracy hides which rule was learned;\nthe counterfactual reveals it"
+    )
+    ax.legend(fontsize=8, loc="lower left")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig0_hero.png"), dpi=130)
+    plt.close(fig)
+
+
+# --- Figure 6: naive classify-vs-articulate scatter (the "glimpse") ------------
+# x = Step-1 classification accuracy; y = fraction of 6 single-shot (no-CoT)
+# articulations, on 6 independent example sets, that state the INTENDED rule.
+# first_letter_vowel 2/6, hunt_first_letter_ae 1/6; everything else 6/6.
+def fig_scatter():
+    from matplotlib.patches import Rectangle
+
+    pts = [
+        ("contains_number", "lexical", 1.00, 1.00, -0.015),
+        ("all_lowercase", "character", 1.00, 1.00, 0.0),
+        ("is_question", "syntactic", 1.00, 1.00, 0.015),
+        ("conjunction", "composite", 0.96, 1.00, 0.0),
+        ("first_word_verb", "syntactic", 0.90, 1.00, 0.0),
+        ("first_letter_vowel", "character", 0.88, 2 / 6, 0.0),
+        ("hunt_first_letter_ae", "character", 1.00, 1 / 6, 0.0),
+    ]
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+    ax.add_patch(
+        Rectangle((0.872, -0.05), 0.183, 0.55, facecolor="#f3d9d9", alpha=0.4, zorder=0)
+    )
+    ax.text(
+        0.975,
+        0.20,
+        "low score here is misleading:\nthese two rules were learned as a\nsimpler rule (see the hero figure)",
+        fontsize=8,
+        color="#8a3438",
+        ha="center",
+    )
+    for name, cat, xc, yc, jit in pts:
+        ax.scatter(
+            xc + jit, yc, s=95, color=CAT_COLOR[cat], edgecolor="black", zorder=3
+        )
+    ax.annotate(
+        "5 genuine rules\n(classify ✓ + articulate intended ✓)",
+        (1.0, 1.0),
+        xytext=(0.905, 0.74),
+        fontsize=8,
+        ha="center",
+        arrowprops=dict(arrowstyle="->", color="grey"),
+    )
+    ax.annotate("first_letter_vowel", (0.88, 0.33), xytext=(0.885, 0.42), fontsize=8)
+    ax.annotate("hunt_first_letter_ae", (1.0, 0.0), xytext=(0.9, 0.06), fontsize=8)
+    handles = [
+        plt.Line2D([], [], marker="o", ls="", color=c, label=k)
+        for k, c in CAT_COLOR.items()
+    ]
+    ax.legend(handles=handles, fontsize=7, loc="center left", title="category")
+    ax.set_xlim(0.85, 1.05)
+    ax.set_ylim(-0.05, 1.12)
+    ax.set_xlabel("classification accuracy (Step 1)")
+    ax.set_ylabel(
+        "fraction of 6 single-shot articulations\nthat state the intended rule"
+    )
+    ax.set_title("Naive landscape: classify vs articulate, per rule")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig6_scatter.png"), dpi=130)
+    plt.close(fig)
+
+
+# --- Figure 7: the substitute is controllable (Experiments 19-20) --------------
+# behaviour matching the intended first-letter-vowel rule, on disagreeing inputs.
+def fig_controllable():
+    labels = [
+        "normal\ntraining",
+        "decorrelated\ntraining",
+        "normal +\nno reasoning",
+        "normal +\nreasoning",
+    ]
+    vals = [0.39, 0.95, 0.38, 0.91]
+    colors = ["#C44E52", "#55A868", "#C44E52", "#55A868"]
+    fig, ax = plt.subplots(figsize=(7.5, 4.6))
+    bars = ax.bar(labels, vals, color=colors)
+    ax.axhline(0.5, ls=":", color="grey", lw=1)
+    ax.text(3.45, 0.52, "chance", color="grey", fontsize=8)
+    ax.axvline(1.5, ls="--", color="black", lw=0.8)
+    ax.text(0.5, 1.05, "change the DATA", ha="center", fontsize=9, color="#444")
+    ax.text(2.5, 1.05, "change the INFERENCE", ha="center", fontsize=9, color="#444")
+    for b, v in zip(bars, vals):
+        ax.text(
+            b.get_x() + b.get_width() / 2,
+            v + 0.02,
+            f"{v:.0%}",
+            ha="center",
+            fontsize=10,
+        )
+    ax.set_ylim(0, 1.12)
+    ax.set_ylabel("behaviour matches the intended\n(first-letter-vowel) rule")
+    ax.set_title(
+        "The substitute is controllable: removing the shortcut,\nor allowing reasoning, recovers the real rule"
+    )
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig7_controllable.png"), dpi=130)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
+    fig_hero()
     fig_sweep()
     fig_salience()
     fig_scaling()
     fig_faithfulness()
     fig_contrast()
-    print(f"wrote 5 figures to {os.path.abspath(OUT)}")
+    fig_scatter()
+    fig_controllable()
+    print(f"wrote 8 figures to {os.path.abspath(OUT)}")
