@@ -43,7 +43,7 @@ rules it learns in context?}}
 \begin{@twocolumnfalse}
 \begin{abstract}
 \noindent
-(I used the full time allowed, with AI assistance for the code and thought, but not for the writing of this report, as directed. My code is available \href{https://github.com/jammastergirish/AstraClassificationOwain}{\textcolor{linkcol}{here}}.)
+(I used the full time allowed, with AI assistance for the code and thought, but not for the writing of this report, as directed. Given more time, I'd have gone deeper into the open weights model work. My code is available \href{https://github.com/jammastergirish/AstraClassificationOwain}{\textcolor{linkcol}{here}}.)
 
 Can a large language model articulate a classification rule it learned from a few in-context examples? And are there 
 rules the model can \emph{apply} accurately but not \emph{describe}? For each rule, I generated balanced (50/50) labelled short nonsense
@@ -156,28 +156,27 @@ digit \emph{but} a capital letter, which forces the model to use both features.}
 \end{tabular}
 \end{table}
 
-\paragraph{Models.} I used Claude Opus~4.8 throughout
-(\S\ref{sec:claude}), before switching to an open-weights replication (\S\ref{sec:gemma}) with Gemma~4 31B.
+\paragraph{Models.} I used Claude Opus~4.8
+(\S\ref{sec:claude}), before switching to (\S\ref{sec:gemma}) Gemma~4 31B, an open weights model, so that I could look at the activations directly.
 
 % ======================================================================
 \section{Results on Claude Opus 4.8}
 \label{sec:claude}
 
 \subsection{Which rules were learnable in context}
-A sweep over my seventeen rules split them cleanly (Table~\ref{tab:classify}). It seemed to me that rules that
-rested on a feature the model tracked as it read---a digit in the middle somewhere, the whole
+A sweep over my seventeen rules split them cleanly (Table~\ref{tab:classify}). It seemed that rules resting on a feature the model tracked as it read---a digit in the middle somewhere, the whole
 string being lowercase, a trailing ``?'', the first word's part of speech, etc.---classified at
 90--100\%. Rules that required counting (even word count, 54\%) or isolating a
 position-specific letter (last letter is a vowel, 50\%) sat at 50:50.
 
-I conducted three controls to secure this. (i)~A \emph{zero-shot} baseline (no examples) put \emph{every} rule at
+I conducted three controls to check this. (i)~A \emph{zero-shot} baseline (no examples) put \emph{every} rule at
 chance (42--57\%), so the competence was not prior knowledge but genuinely in-context learning.
 (ii)~\emph{Scaling} \rulename{last\_char\_vowel} to 18/50/100/200 examples left it flat
 at chance (54/50/48/52\%) while \rulename{all\_lowercase} stayed at 100\%. That means addingmore data did
 not rescue a sub-symbolic rule. (iii)~Accuracies remained stable across three example sets, with
 non-overlapping confidence intervals between learnable and unlearnable groups.
 
-The reason for the split I believe mechanical. The model reads text as tokens, of course, not
+The reason for the split is, I believe, mechanical. The model reads text as tokens, of course, not
 letter by letter. (This is the same limitation behind infamously miscounting the r's in ``strawberry''). So 
 word-internal spelling was largely inaccessible. The split was \emph{not} meaning vs.\
 surface---``ends with ?'' was a surface feature learned perfectly, because ``?'' is its
@@ -256,29 +255,51 @@ state a meaning-based substitute; reasoning (CoT) recovers the intended rule for
 
 \subsection{The counterfactual test: substitutes, not gaps}
 \label{sec:cf}
-I tried inputs on which the intended letter rule and the function-word
-substitute disagreed. For example, \ a \emph{novel} vowel-content first word (``orange\,\dots'',
-``eagle\,\dots''): the letter rule said \textsf{True}, the substitute said
-\textsf{False}; and a consonant function word (``by\,\dots'', ``the\,\dots''): the letter
-rule said \textsf{False}, the substitute said \textsf{True}. Across 300 such
-discriminating items, the model's behaviour followed the \emph{substitute} 63\% of the
-time and the intended letter rule only 37\% (95\% CI 32--43\%; Fig.~\ref{fig:faith}). The
-substitute it \emph{articulated} was therefore the rule that actually \emph{governed} its
-behaviour---the articulation was faithful; only my \emph{intent} diverged. A built-in
-memorisation probe confirmed the mechanism: \emph{in-vocabulary} vowel words were labelled
-\textsf{True} 48\% of the time versus 29\% for novel ones, a 19-point gap showing the
-model leaned on specific memorised training words rather than a general letter rule.
+High Step-1 accuracy does not show, at least on its own, that the model had learned the rule I
+intended. A handful of examples don't pin down a single rule. Many
+different rules can label the same examples the same way.
 
-This was \emph{underdetermination}: with finitely many examples, many rules fit, and the
-model honestly reported the easier one it had actually learned. Figure~\ref{fig:hero} makes
-the point across all five $\ge$90\% rules: ordinary in-distribution accuracy (grey) was
-high everywhere and revealed \emph{nothing} about which rule was learned; only
-counterfactual \emph{genuineness} (coloured) separated the three genuine rules
+For \rulename{first\_letter\_vowel} two rules fit almost equally well: The
+\emph{intended} rule was ``the first letter is a vowel.'' A simpler \emph{substitute} was
+``the first word is a short function word'' (like \emph{in}, \emph{at}, \emph{on},
+\emph{of}, \emph{and}, \emph{is}). The two agreed on the training data only by coincidence: the words in my generator that happened to start with a vowel were almost
+all function words, so ``starts with a vowel'' and ``is a function word'' produced the same
+label on nearly every training example. Ordinary accuracy therefore could not tell them
+apart. Both rules score $\sim$88\%.
+
+To separate them I built \emph{minimal pairs}: inputs on which the two rules \emph{disagree},
+so the model's answer reveals which one it is actually using. Two kinds of input do this.
+(i)~A vowel-initial \emph{content} word that is not a function word---and, crucially, a
+\emph{novel} word the model never saw in training, such as ``orange'' or ``eagle.'' Here
+the intended rule would label the input \textsf{True} (it starts with a vowel) but the
+substitute \textsf{False} (it is not a function word). (ii)~A function word that starts
+with a \emph{consonant}, such as ``by'' or ``the.'' Here the intended rule would label it
+\textsf{False} but the substitute \textsf{True}. On each such input the two hypotheses
+predict opposite labels, so whichever label the model gave identified the rule it had
+really learned.
+
+Across 300 of these disagreeing inputs the model followed the \emph{substitute} 63\% of the
+time and the intended letter rule only 37\% (95\% CI 32--43\%; Fig.~\ref{fig:faith}). The
+rule the model had \emph{articulated} (``the first word is a function word'') was thus also
+the rule that actually \emph{governed} its behaviour. Its articulation was faithful to what
+it did. Only my \emph{intent} diverged from both. A memorisation probe confirmed the
+mechanism. Words beginning with vowels that the model \emph{had} seen in training were labelled
+\textsf{True} 48\% of the time, but genuinely novel words beginning with vowels only 29\%---a
+19-point gap showing the model had memorised a few specific training words rather than
+learning the general ``starts with a vowel'' rule.
+
+This was \emph{underdetermination}. A finite set of examples is consistent with many rules,
+and the model seemingly learned, used, and reported the easier of the two it could not
+distinguish. Figure~\ref{fig:hero} makes the point across all five rules that classified at
+$\ge$90\%. Ordinary in-distribution accuracy (grey) was high for every one and revealed
+\emph{nothing} about which rule had been learned; only the counterfactual test---\emph{genuineness},
+the fraction of disagreeing inputs on which behaviour followed the \emph{intended} rule
+(coloured)---told them apart. It cleanly separated the three genuine rules
 (\rulename{first\_word\_verb} 97\%, \rulename{is\_question} 97\%, conjunction 100\%) from
 the two substitutes (\rulename{first\_letter\_vowel} 37\%, \rulename{hunt\_first\_letter\_ae}
-51\%, falling to 12\% on the sharpest test of whether it applied the rule to unfamiliar
-words). The deciding factor was whether the intended feature was one the model could represent
-semantically, not how hard the rule was in the abstract.
+51\%, dropping to 12\% on the sharpest test, whether it applied the rule to unfamiliar
+words). What decided which group a rule fell into was whether its intended feature was one
+the model could represent in terms of meaning, not how hard the rule was in the abstract.
 
 \begin{figure}[t]
 \centering
@@ -311,20 +332,22 @@ accuracy / genuineness (0--1); $x$-axis: rule.}
 \end{figure*}
 
 \subsection{The model knew the concept; the substitute was controllable}
-Two experiments ruled out the boring explanation and showed the phenomenon was not a fixed
+I conducted two further experiments to rule out the boring explanation and show the phenomenon was not a fixed
 limit. First, an \emph{isolation probe}: asked directly ``Does `orange' start with a
 vowel? Yes/No'' for 24 words---including the exact novel words it labelled \textsf{False}
-and function words it labelled \textsf{True}---the model was right 24/24 (100\%). So the
-failure was one of \emph{deployment}, not knowledge. Second, the substitute could be
-switched off (Fig.~\ref{fig:control}) from either direction: \emph{decorrelating} the
-training examples so the function-word shortcut no longer fit made behaviour match the
-intended rule 95\% of the time (up from 39\%), and \emph{allowing reasoning} at
-classification time on the \emph{same} ordinary examples did the same (91\% vs.\ 38\%).
-The model had the real rule available throughout; which rule it deployed was set by how
-underdetermined the data was and whether it reasoned, not by any inability. (A subtlety:
-CoT used only to \emph{articulate} could mislead, since no-reasoning \emph{behaviour} might
-still follow the substitute---the mismatch was reasoned articulation vs.\ unreasoned
-behaviour.)
+and function words it labelled \textsf{True}---the model was correct 24/24 (100\%). So the
+failure was not one of knowledge. Second, I could switch the substitute off entirely (Fig.~\ref{fig:control}), from either
+direction. \emph{Decorrelating} the training examples, so the function-word shortcut no
+longer fit, made behaviour follow the intended rule 95\% of the time, up from 39\%. And
+simply \emph{letting the model reason} before it answered, on the very same ordinary
+examples, did much the same: 91\%, up from 38\%. So the model had the real rule available
+all along. Which rule it deployed seemed to depend on how underdetermined the examples
+were, and whether it was allowed to reason, not on any inability of its own.
+
+One subtlety is worth flagging. Chain-of-thought can mislead here when it is used only to
+\emph{articulate} the rule, because the model's no-reasoning \emph{behaviour} may still be
+following the substitute. The mismatch is then between reasoned articulation and unreasoned
+behaviour, not a fixed property of the model.
 
 \begin{figure}[t]
 \centering
@@ -342,40 +365,41 @@ intended rule; $x$-axis: condition.}
 % ======================================================================
 \section{Open-weights replication: reading the rules off the activations}
 \label{sec:gemma}
-Everything above was behavioural; on a closed model I could never see what was
-\emph{represented}. I therefore replicated the load-bearing parts on Gemma~4 31B, whose
-weights let me read the residual stream directly. \rulename{first\_letter\_vowel} was
-learnable there too (90\% in-distribution, alongside \rulename{all\_lowercase} 85\%,
-\rulename{is\_question} 85\%, conjunction 80\%).
+Everything so far was behavioural, and with a closed model like Claude that is all we get
+to see. So I repeated the load-bearing experiments on Gemma~4 31B, an open-weights model
+whose residual stream I can read directly. \rulename{first\_letter\_vowel} was learnable
+there too, at 90\% in-distribution (alongside \rulename{all\_lowercase} 85\%,
+\rulename{is\_question} 85\%, and the conjunction 80\%).
 
-\paragraph{Behaviour: a blend, not a collapse.} Re-running the
-\S\ref{sec:cf} counterfactual as a balanced $2{\times}2$ (vowel/consonant first letter
-$\times$ content/function first word), Gemma's behaviour on the discriminating cells
-matched the pure letter rule 56\% of the time---neither a clean letter rule ($\sim$100\%)
-nor a clean substitute ($\sim$0\%). Reading the table edges, switching the first letter to
-a vowel added $\sim$39 points of \textsf{True} and switching the first word to a function
-word added $\sim$27 points, and the two effects roughly added. So Gemma used \emph{both}
-rules at once, with the intended letter rule the slightly \emph{stronger} driver---a real
-difference from Claude, which collapsed onto the substitute.
+\paragraph{Behaviour: a blend, not a collapse.} I re-ran the \S\ref{sec:cf} counterfactual
+as a balanced $2{\times}2$ (vowel/consonant first letter $\times$ content/function first
+word). On the discriminating cells, Gemma matched the pure letter rule 56\% of the time.
+Reading the edges of the table, switching the first letter to a vowel added about 39 points
+of \textsf{True}, and switching the first word to a function word added about 27; the two
+effects roughly added. So Gemma seemed to use \emph{both} rules at once, with the intended
+letter rule the slightly \emph{stronger} driver. That is a real difference from Claude,
+which collapsed onto the substitute.
 
-\paragraph{Representation: both rules are written down.} I trained a logistic-regression
-probe on the residual stream at the answer position (the token right after
-\texttt{Label:}), splitting train/test \emph{by word} so the probe had to read the concept,
-not memorise words, and using the decorrelated $2{\times}2$ so each cue was statistically
-independent of the other. A methodology check first confirmed the pipeline: from a bare
-word, a probe for ``first letter is a vowel'' reached 99\% on held-out words. At the
-decision point (Fig.~\ref{fig:probe}), \emph{both} cues were linearly decodable well above
-chance: the intended letter rule peaked at 86\% and the function-word substitute at 96\%.
-The underdetermination was thus a measured fact about the representation, not merely an
-inference from behaviour---both competing rules coexisted in the activations, and the data
-never forced a choice. Two nuances: the substitute was the \emph{more decodable}
-cue and stayed so to the final layer (78\% vs.\ 64\%), yet the counterfactual found the
-letter the \emph{stronger behavioural driver}; decodability is not causal use, and the
-two facts sit in tension.
+\paragraph{Representation: both rules are written down.} I then trained a simple
+logistic-regression probe on the residual stream at the answer position, the token right
+after \texttt{Label:}. I split train and test \emph{by word}, so the probe had to read the
+concept rather than memorise which words it had seen, and I used the decorrelated
+$2{\times}2$ so that each cue was independent of the other. As a check that the pipeline
+worked at all, a probe reading ``first letter is a vowel'' off a bare word reached 99\% on
+held-out words. At the decision point itself (Fig.~\ref{fig:probe}), both cues were
+linearly decodable well above chance: the intended letter rule peaked at 86\%, the
+function-word substitute at 96\%.
+
+So the underdetermination was not just an inference from behaviour. It was a measured fact
+about the representation: both competing rules coexisted in the activations, and the data
+never forced a choice between them. Two things temper this. The substitute was the more
+decodable of the two, and stayed so right to the final layer (78\% vs.\ 64\%), even though
+the counterfactual had found the letter the stronger behavioural driver. Decodability is
+not the same as causal use, so I should not over-read the gap.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.8\linewidth]{figures/fig8_gemma_probe.png}
+\includegraphics[width=\linewidth]{figures/fig8_gemma_probe.png}
 \caption{\textbf{Linear probes on Gemma~4 31B: where each rule is written down.}
 Held-out-word probe accuracy at each layer. \textbf{Dark:} methodology baseline---a probe
 for ``first letter is a vowel'' read from a \emph{bare word}, which the pipeline recovers
@@ -390,26 +414,29 @@ chance line, so both rules are linearly encoded when the model decides; the subs
 
 % ======================================================================
 \section{Discussion}
-The results supported a single structural claim:
-\begin{quote}\itshape
-In-context few-shot learning recovers the intended rule when that rule rests on a feature
-the model represents semantically, but substitutes an on-distribution-equivalent semantic
-proxy when the intended feature is sub-symbolic (position-specific letters, counts). In
-the proxy case the model faithfully uses \emph{and} reports the proxy---so the apparent
-``articulation failure'' is underdetermination (it learned a different rule and honestly
-says so), not introspective failure or dishonesty. Only counterfactual / out-of-distribution
-probing distinguishes the two.
-\end{quote}
-The practical lesson is methodological: \emph{in-distribution accuracy tells you nothing
-about which rule a model learned.} A rule can be classified at 100\% and articulated
-fluently while the articulated rule, the behavioural rule, and the rule you intended are
-three different things. Scoring an articulation against the intended rule alone would
-mislabel a substitute as a ``cannot articulate'' case; only a counterfactual test
-separates them.
-On the dishonesty question the brief raised, my answer was the more interesting negative:
-the model was not hiding a rule it used---it used the substitute and reported the
-substitute. The knowledge of the letter concept existed (100\% in isolation) but was simply
-not recruited when learning from examples, and reasoning or decorrelated data recruited it.
+The whole study points to one claim. In-context learning recovered the rule I intended
+whenever that rule rested on a feature the model already represents in terms of
+meaning---a word's part of speech, the punctuation that ends a sentence, the presence of a
+digit. When the intended feature was instead sub-symbolic, like a particular letter inside
+a word or a count, the model quietly substituted an easier feature that gave the same
+answers on the training data, and then both used and reported that substitute. So the
+apparent ``articulation failure'' was not the model failing to introspect, and it was not
+dishonesty. It was underdetermination: the model had learned a different rule from the one
+I had in mind, and told me so faithfully. Only a counterfactual or out-of-distribution test
+tells the two apart.
+
+The practical lesson is a methodological one: \emph{in-distribution accuracy tells you
+almost nothing about which rule a model has actually learned.} A rule can be classified at
+100\% and articulated fluently while the rule the model articulates, the rule that drives
+its behaviour, and the rule I intended are three different things. Grading an articulation
+against the intended rule alone would wrongly mark a faithful substitute as a ``cannot
+articulate'' case. Only the counterfactual test separates them.
+
+This also speaks to the dishonesty worry in the brief, and my answer is the more
+interesting negative. The model was not hiding a rule it was using. It used the substitute
+and it reported the substitute. It plainly knew the underlying letter concept---it scored
+100\% when I asked in isolation---but that knowledge simply was not recruited when it
+learned the rule from examples. Reasoning, or decorrelated data, recruited it.
 
 \paragraph{Limitations.} The substitute finding rested on two letter rules, both about the
 \emph{first} letter; a substitute from a different sub-symbolic feature would broaden the
@@ -417,41 +444,7 @@ claim. \rulename{first\_word\_verb} was near the 90\% boundary (it dipped to 80\
 seed). Articulations were graded by eye; a validated automatic grader would be needed to
 scale to many rules. The Gemma probe rested on modest
 data ($\pm$2--5\%), and crucially it showed what was linearly \emph{present}, not what was
-causally \emph{used}; closing that gap would need an intervention (steering along the probe
-direction and checking whether the answer moves), which I leave to future work.
-
-% ======================================================================
-\appendix
-\section{Verbatim articulations}
-\label{app:verbatim}
-\noindent\textbf{\rulename{first\_letter\_vowel}, six no-reasoning seeds}
-(\xmark\ $=$ function-word substitute; \cmark\ $=$ letter rule; this is why the
-articulation rate is 2/6):
-{\footnotesize\ttfamily
-\begin{itemize}\setlength\itemsep{0pt}
-\item[s0] ``one of the first two words is a function word (in,at,on,of,and,by,is,a)'' \xm
-\item[s1] ``contains one of a/an/and/at/by/in/is/of/on/\dots'' \xm
-\item[s2] ``the first word's first letter is a vowel (a,e,i,o,u)'' \textcolor{genuine}{\checkmark}
-\item[s3] ``contains a function word a/of/on/at/and/is/by/to/with'' \xm
-\item[s4] ``its first word is a vowel-starting word (a,in,on,is,old,umbrella,\dots)'' \textcolor{genuine}{\checkmark}
-\item[s5] ``contains a preposition/article/be-verb function word\dots'' \xm
-\end{itemize}}
-\noindent The CoT articulation \emph{recovered} the letter rule, but only by
-\emph{enumerating} the example first words (``\dots\ elephant, apple, umbrella --- these
-all start with vowels!''): it reconstructed the rule rather than reading it off, which is
-why no-reasoning articulation was the more faithful readout of the rule the model used.
-
-\medskip
-\noindent\textbf{Prior-only control.} With \emph{zero} examples the model defaulted to
-``Always True''; with \emph{shuffled} labels it confabulated a plausible-but-wrong rule
-(usually ``the number of words is odd'') and never recovered the real one---so
-articulations were driven by the evidence in the examples, not by priors.
-
-\medskip
-\noindent\textbf{Genuine-rule counterfactuals} (decisive cells): \rulename{is\_question},
-``?'' \emph{mid}-sentence $\to$ \textsf{False} 116/120 (keyed on the \emph{ending});
-conjunction, a digit but capitals $\to$ \textsf{False} 120/120 (used \emph{both}
-features); \rulename{first\_word\_verb}, noun first / verb later $\to$ \textsf{False}
-145/150 (keyed on the \emph{first word}).
+causally \emph{used}. I'd love to steer along the probe
+direction and check whether the answer moves.
 
 \end{document}
