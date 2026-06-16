@@ -69,12 +69,21 @@ def answer_token_ids(tok):
 
 
 @torch.no_grad()
-def classify(model, tok, true_id, false_id, examples, query, dump_hidden=False):
+def classify(
+    model, tok, true_id, false_id, examples, query, dump_hidden=False, debug=False
+):
     text = build_prompt(examples, query)
     enc = tok(text, return_tensors="pt").to(model.device)
     out = model(**enc, output_hidden_states=dump_hidden)
     last = out.logits[0, -1]  # logits for the token that comes after 'Label:'
     pred = last[true_id].item() > last[false_id].item()
+    if debug:
+        top = last.topk(6)
+        toks = [repr(tok.decode([i])) for i in top.indices.tolist()]
+        print(
+            f"    top tokens: {list(zip(toks, [round(v, 1) for v in top.values.tolist()]))}"
+            f"  | ' True'={last[true_id]:.1f} ' False'={last[false_id]:.1f}"
+        )
     hidden = None
     if dump_hidden:
         # per-layer residual stream at the answer position
@@ -94,6 +103,9 @@ def main():
         "--dump-hidden", action="store_true", help="(for probing) save hidden states"
     )
     ap.add_argument("--device", default="auto", help="auto | cuda | mps | cpu")
+    ap.add_argument(
+        "--debug", action="store_true", help="print top tokens for the first few items"
+    )
     args = ap.parse_args()
 
     if args.device == "auto":
@@ -131,8 +143,11 @@ def main():
         fewshot = sample_balanced(rule, args.n_fewshot, seed=0)
         test = sample_balanced(rule, args.n_test, seed=1000)
         correct = 0
-        for x, y in test:
-            pred, _ = classify(model, tok, true_id, false_id, fewshot, x)
+        for i, (x, y) in enumerate(test):
+            dbg = args.debug and i < 3  # show diagnostics for the first few items
+            if dbg:
+                print(f"  [{key}] input={x!r}  true_label={y}")
+            pred, _ = classify(model, tok, true_id, false_id, fewshot, x, debug=dbg)
             correct += pred == y
         print(f"{key:<28} {correct}/{len(test)} = {correct / len(test):.0%}")
 

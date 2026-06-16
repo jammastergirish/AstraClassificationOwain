@@ -6,9 +6,8 @@ inputs) without being able to articulate the rule it has learned?**
 
 Subject model: **Claude Opus 4.8** (`claude-opus-4-8`). Step 1 classification runs
 with **no chain-of-thought** (single-token answer); Step 2 articulation may use CoT.
-
-> The written report must be the author's own work (AI only for typo/grammar
-> checks). This repo is the experimental harness and figure pipeline, not a draft.
+An open-weights arm replicates the key finding on a local Hugging Face model (Gemma)
+and adds linear probes for the mechanistic version of the story.
 
 ## Setup
 
@@ -17,6 +16,15 @@ cp .env.example .env          # then paste your ANTHROPIC_API_KEY
 uv sync                       # creates the venv, installs deps + this package
 uv run python experiments/check_rules.py     # local, no API/key needed
 uv run python experiments/smoke_test.py --rule contains_number
+```
+
+Closed-model experiments need only `ANTHROPIC_API_KEY`; responses are cached on disk,
+so reruns are free. The open-weights arm is optional and heavier:
+
+```bash
+uv sync --extra gpu           # adds torch / transformers / scikit-learn
+# Gemma is gated: accept its licence and add HF_TOKEN to .env
+uv run python experiments/gemma_classify.py --model google/gemma-4-31B-it
 ```
 
 ## What's here
@@ -30,6 +38,11 @@ uv run python experiments/smoke_test.py --rule contains_number
 | `src/articulation/cache.py` | on-disk response cache (reruns are free) |
 | `experiments/check_rules.py` | local balance sanity check (no API) |
 | `experiments/smoke_test.py` | one rule end-to-end (classify + control + articulate) |
+| `experiments/sweep_classify.py`, `scale_fewshot.py` | Step-1 accuracy sweeps |
+| `experiments/faithfulness_*.py`, `proxy_checks.py`, `confounds_*.py` | Step-3 + confound batteries |
+| `experiments/gemma_classify.py`, `gemma_counterfactual.py` | open-weights replication |
+| `experiments/gemma_probe.py`, `gemma_probe_figure.py` | linear probes on the open model |
+| `experiments/make_figures.py` | redraw the figures in `figures/` |
 
 Rules span four categories chosen to span the hypothesised axis — **introspective
 accessibility**: `lexical` (semantic, expect articulate ✓), `syntactic` (~),
@@ -44,20 +57,15 @@ accessibility**: `lexical` (semantic, expect articulate ✓), `syntactic` (~),
    rule (counterfactual minimal pairs, articulation-as-classifier, the
    spurious-correlate experiment)?
 
-## Confound battery (the controls that make the result credible)
+## Confound battery
 
-Protecting **Step 1 (real in-context learning?)**: **C1** shuffled-label · **C2**
-zero-shot baseline · **C3** balanced classes + per-class accuracy · **C4**
-synthetic inputs + programmatic labelers (no contamination) · **C5** seed/order
-variance · **C6** held-out test + binomial CIs.
-
-Protecting **Step 2 (real articulation failure?)**: **C7** prior-only articulation
-(the dual of C1) · **C8** neutral Step-1 instruction + larger separate example set ·
-**C9** judge validation (lenient vs strict, equivalence not string match) · **C10**
-recognition-vs-generation split with on-distribution near-miss distractors.
-
-Protecting **Step 3 (faithful?)**: three rules — *intended* / *articulated* /
-*behavioral* — and the science is in the mismatches. The underdetermination
-confound: with finite examples many rules fit, so failing to state the *intended*
-rule may be *correct* (it learned an equivalent rule); counterfactual/OOD probing
-reveals the *behavioral* rule.
+A set of controls makes each step credible. **Step 1 (real in-context learning?):**
+shuffled-label and zero-shot baselines, balanced classes with per-class accuracy,
+synthetic inputs + programmatic labelers (no contamination), seed/order variance, and
+held-out test sets with binomial CIs. **Step 2 (real articulation failure?):**
+prior-only articulation, a neutral Step-1 instruction, judge validation by equivalence
+(not string match), and a recognition-vs-generation split with near-miss distractors.
+**Step 3 (faithful?):** three rules are tracked — *intended* / *articulated* /
+*behavioral* — and the science is in the mismatches. With finite examples many rules
+fit, so failing to state the *intended* rule may be *correct* (an equivalent rule was
+learned); counterfactual/OOD probing recovers the *behavioral* rule.

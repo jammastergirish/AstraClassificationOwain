@@ -58,13 +58,14 @@ def fig_sweep():
     ax.axvline(0.50, ls=":", color="grey", lw=1)
     ax.set_xlabel("Step-1 classification accuracy (held-out, 50 examples, no CoT)")
     ax.set_xlim(0, 1.02)
+    ax.set_ylabel("rule")
     ax.set_title("Which rules can the model learn in-context?")
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in CAT_COLOR.values()]
     ax.legend(
         handles, CAT_COLOR.keys(), loc="lower right", fontsize=8, title="rule category"
     )
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig1_sweep.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig1_sweep.png"), dpi=160)
     plt.close(fig)
 
 
@@ -81,7 +82,7 @@ def fig_salience():
     ax.set_title("Same feature ('is a vowel'), different position")
     ax.legend(fontsize=8)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig2_salience.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig2_salience.png"), dpi=160)
     plt.close(fig)
 
 
@@ -91,8 +92,8 @@ def fig_scaling():
     last = [0.54, 0.50, 0.48, 0.52]
     lower = [1.0, 1.0, 1.0, 1.0]
     fig, ax = plt.subplots(figsize=(5, 4))
-    ax.plot(n, lower, "o-", color="#4C72B0", label="all_lowercase (salient)")
-    ax.plot(n, last, "o-", color="#C44E52", label="last_char_vowel (sub-symbolic)")
+    ax.plot(n, lower, "o-", color="#4C72B0", label="all_lowercase (a case rule)")
+    ax.plot(n, last, "o-", color="#C44E52", label="last_char_vowel (a letter rule)")
     ax.axhline(0.50, ls=":", color="grey", lw=1)
     ax.set_xlabel("number of few-shot examples")
     ax.set_ylabel("classification accuracy")
@@ -100,7 +101,7 @@ def fig_scaling():
     ax.set_title("More examples don't rescue a sub-symbolic rule")
     ax.legend(fontsize=8)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig3_scaling.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig3_scaling.png"), dpi=160)
     plt.close(fig)
 
 
@@ -140,7 +141,7 @@ def fig_faithfulness():
     ax.set_title("first_letter_vowel: what rule actually governs behavior?")
     ax.legend(fontsize=8, loc="upper center")
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig4_faithfulness.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig4_faithfulness.png"), dpi=160)
     plt.close(fig)
 
 
@@ -148,8 +149,8 @@ def fig_faithfulness():
 # first_word_verb: 145/150 match intended; first_letter_vowel: 113/300 match intended
 def fig_contrast():
     labels = [
-        "first_word_verb\n(intended = semantic)",
-        "first_letter_vowel\n(intended = sub-symbolic)",
+        "first_word_verb\n(part-of-speech rule)",
+        "first_letter_vowel\n(first-letter rule)",
     ]
     frac = [145 / 150, 112 / 300]
     err = [[145 / 150 - 0.94, 0.37 - 0.32], [1.00 - 145 / 150, 0.43 - 0.37]]
@@ -171,7 +172,7 @@ def fig_contrast():
         )
     ax.text(0.5, 0.46, "chance", color="grey", fontsize=8)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig5_genuine_vs_proxy.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig5_genuine_vs_proxy.png"), dpi=160)
     plt.close(fig)
 
 
@@ -213,13 +214,18 @@ def fig_hero():
     ax.text(
         1.0,
         1.07,
-        "GENUINE  (semantic feature)",
+        "GENUINE  (learned the intended rule)",
         ha="center",
         fontsize=9,
         color="#3a7a4f",
     )
     ax.text(
-        3.5, 1.07, "PROXY  (sub-symbolic)", ha="center", fontsize=9, color="#8a3438"
+        3.5,
+        1.07,
+        "SUBSTITUTE  (learned an easier rule)",
+        ha="center",
+        fontsize=9,
+        color="#8a3438",
     )
     ax.set_xticks(list(x))
     ax.set_xticklabels(rules, fontsize=8)
@@ -230,7 +236,7 @@ def fig_hero():
     )
     ax.legend(fontsize=8, loc="lower left")
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig0_hero.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig0_hero.png"), dpi=160)
     plt.close(fig)
 
 
@@ -275,7 +281,9 @@ def fig_scatter():
         arrowprops=dict(arrowstyle="->", color="grey"),
     )
     ax.annotate("first_letter_vowel", (0.88, 0.33), xytext=(0.885, 0.42), fontsize=8)
-    ax.annotate("hunt_first_letter_ae", (1.0, 0.0), xytext=(0.9, 0.06), fontsize=8)
+    ax.annotate(
+        "hunt_first_letter_ae", (1.0, 0.0), xytext=(1.0, 0.05), ha="center", fontsize=8
+    )
     handles = [
         plt.Line2D([], [], marker="o", ls="", color=c, label=k)
         for k, c in CAT_COLOR.items()
@@ -289,7 +297,7 @@ def fig_scatter():
     )
     ax.set_title("Naive landscape: classify vs articulate, per rule")
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig6_scatter.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig6_scatter.png"), dpi=160)
     plt.close(fig)
 
 
@@ -325,7 +333,7 @@ def fig_controllable():
         "The substitute is controllable: removing the shortcut,\nor allowing reasoning, recovers the real rule"
     )
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "fig7_controllable.png"), dpi=130)
+    fig.savefig(os.path.join(OUT, "fig7_controllable.png"), dpi=160)
     plt.close(fig)
 
 
