@@ -10,4 +10,9 @@ __pycache__/
 results/*.csv
 results/*.parquet
 
-# figures/*.png are committed on purpose — they're embedded in RESULTS.md.
+report.aux
+report.log
+report.out
+report.pdf
+
+RESULTS.md
